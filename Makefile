@@ -71,12 +71,12 @@ deb-git-import:
 
 deb-git-release:
 	git checkout debian
-	git-dch --release
+	git-dch --release -a
 	git commit debian/changelog --amend
 
 deb-git-snapshot:
 	git checkout debian
-	git-dch --snapshot
+	git-dch --snapshot -a
 	git commit debian/changelog --amend
 
 deb-git-tag:
