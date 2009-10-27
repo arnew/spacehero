@@ -65,10 +65,12 @@ std::vector<Star> Galaxy::getStars(int seed) {
 
   int n=NOrbits;
   double orb = R_MIN_CENTER + (double)((rand() / (RAND_MAX + 1.0)) / 150.0);
-  while (n--) {
+  while (n--) 
+  {
     orb += R_MIN + ((double)((rand() / (RAND_MAX + 1.0))) / 550.0);
     int m=NStarsPerOrbit;
-    while (m--) {
+    while (m--)
+    {
       double phi = (double)(360 * (rand() / (RAND_MAX + 1.0)));
       double z = (double)((rand() / (RAND_MAX + 1.0)) - 0.5)*(0.001/orb);
       z = 0;
@@ -82,14 +84,13 @@ std::vector<Star> Galaxy::getStars(int seed) {
 Universe::Universe(Level &l) :
   Level(l),
   m_won(false),
-  stargrav(false),
-  stars()
+  stargrav(false)
 {
   calcStars();
 }
 
 
-void Universe::calcStars()
+void Sky::calcStars()
 {
   stars.clear();
 

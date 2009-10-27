@@ -50,7 +50,7 @@ SpaceDisplay::SpaceDisplay(std::string path) :
   textures.addTexture("timesup");
 }
 
-void SpaceDisplay::drawBridge(Universe &uni, BridgeView view, double indicator, double holeWeight, bool settingGalaxy, int galaxyX, int galaxyY)
+void SpaceDisplay::drawBridge(Universe &uni, BridgeView view, double indicator, double holeWeight)
 {
   double center, ypos, margin;
   int mrx, mry, y;
@@ -70,11 +70,27 @@ void SpaceDisplay::drawBridge(Universe &uni, BridgeView view, double indicator, 
   /**************************
    *        INFOTEXT        *
    **************************/
-  float fontsize = 18;
+  float fontsize = 20;
   float fmargin = 3;
-  y = 1;
-  #define Y display.getHeight()-(fontsize*(y++)+fmargin)
-  illustrator.glPrint( fontsize, TEXTR, TEXTG, TEXTB, fmargin, Y, "Task: Navigate the green galaxy into the green target area.");
+  y = 0;
+  #define Y (fontsize*(y++)+fmargin)
+  std::string help = "Task: Navigate the green galaxy";
+  bool foundone = false;
+  for(unsigned int i = 0; i < uni.galaxies.size(); i++)
+  {
+    if(uni.galaxies.at(i).getmaster())
+    {
+      if(!foundone)
+      {
+	foundone = true;
+      } else {
+        help += "s";
+	break;
+      }
+    }
+  }
+  help += " into the green target area.";
+  illustrator.glPrint( fontsize, TEXTR, TEXTG, TEXTB, fmargin, Y, help.c_str());
   for(i = 0; i < uni.galaxies.size(); i++)
   {
     if(uni.galaxies[i].exists)
@@ -86,9 +102,13 @@ void SpaceDisplay::drawBridge(Universe &uni, BridgeView view, double indicator, 
     }
   }
 
-  illustrator.glPrint( fontsize, TEXTR, TEXTG, TEXTB, fmargin, Y, "fps: %07.2f",uni.fps());
-  illustrator.glPrint( fontsize, TEXTR, TEXTG, TEXTB, fmargin, Y, "elapsed: %2.2f",uni.elapsed());
-  illustrator.glPrint( fontsize, TEXTR, TEXTG, TEXTB, fmargin, Y, "won: %d",uni.won());
+  if(view == SimulationView)
+  { 
+    illustrator.glPrint( fontsize, TEXTR, TEXTG, TEXTB, fmargin, Y, "fps: %02.2f",uni.fps());
+  }
+ // illustrator.glPrint( fontsize, TEXTR, TEXTG, TEXTB, fmargin, Y, "elapsed: %2.2f",uni.elapsed());
+ // illustrator.glPrint( fontsize, TEXTR, TEXTG, TEXTB, fmargin, Y, "won: %d",uni.won());
+  illustrator.glPrint( fontsize*2, TEXTR, TEXTG, TEXTB, fmargin, display.getHeight()-fontsize*2.3, uni.getName().c_str());
   #undef Y
 
 
@@ -134,6 +154,9 @@ void SpaceDisplay::drawBridge(Universe &uni, BridgeView view, double indicator, 
       ypos = display.getHeight()*0.75;
     } else {
       ypos = display.getHeight()*0.35;
+
+      /* Skip */
+      buttons.addButton("button_green", center+REPLAY_BUTTON, display.getHeight()-UNIVERSE_BOTTOM-(START_BUTTON*2.1)-REPLAY_BUTTON, REPLAY_BUTTON, ButtonFlags::skipLevel);
     }
 
     /* Simulation starten */
@@ -183,14 +206,14 @@ void SpaceDisplay::drawBridge(Universe &uni, BridgeView view, double indicator, 
    /**************************
    *       UNIVERSUM        *
    **************************/ 
-  displayUniverse(uni, width, height);     
+  displayUniverse(uni, width, height, false, true, (view == EditorView || view == PutView));     
 
   /* Versteckten Buffer aktivieren */
 //  SDL_GL_SwapBuffers();
 }
 
 
-void SpaceDisplay::displayUniverse( Universe &uni, int width, int height, bool eye, bool pleft )
+void SpaceDisplay::displayUniverse( Universe &uni, int width, int height, bool eye, bool pleft, bool arrows )
 {
   if(eye && pleft)
   {
@@ -281,8 +304,6 @@ void SpaceDisplay::displayUniverse( Universe &uni, int width, int height, bool e
 /*  glDisable(GL_BLEND);*/
 
   /* Galaxienmittelpunkte */
-  textures.useTexture("bulge");
-
   for(i = 0; i < uni.galaxies.size(); i++)
   {
     if(uni.galaxies[i].exists)
@@ -293,7 +314,17 @@ void SpaceDisplay::displayUniverse( Universe &uni, int width, int height, bool e
       } else {
         glColor3f(1.0f,1.0f,1.0f);
       }
+
+      textures.useTexture("bulge");
       drawSkymass(uni.galaxies[i]);
+
+      if(arrows)
+      {
+	glColor4f(0.4,0.4,0,1);
+#define ARROWFAC 0.5e-6
+	getIllustrator()->drawLine(uni.galaxies.at(i).getX(),uni.galaxies.at(i).getY(),uni.galaxies.at(i).getX()+uni.galaxies.at(i).getVX()*ARROWFAC,uni.galaxies.at(i).getY()+uni.galaxies.at(i).getVY()*ARROWFAC,2,true,0.06);
+        glColor4f(1,1,1,1);
+      }
     }
   }
 
@@ -447,8 +478,9 @@ void SpaceDisplay::showMenu(double time)
   buttontime = 1.0-exp(-((time-3)*100)*0.009);
   buttontime = (buttontime > 0)?buttontime:0;
   buttontime = (buttontime < scale)?buttontime:scale;
-  buttons.addButton("button_start", display.getWidth()*0.2, display.getHeight()*0.2, display.getWidth()*0.08*buttontime, ButtonFlags::startGame);
   buttons.addButton("button_x", display.getWidth()*0.8, display.getHeight()*0.8, display.getWidth()*0.08*buttontime, ButtonFlags::exit);
+  buttons.addButton("button_start", display.getWidth()*0.2, display.getHeight()*0.2, display.getWidth()*0.08*buttontime, ButtonFlags::startGame);
+  buttons.addButton("button_green", display.getWidth()*0.15, display.getHeight()*0.75, display.getWidth()*0.08*buttontime, ButtonFlags::chooseLevel);
   buttons.addButton("button_green", display.getWidth()*0.7, display.getHeight()*0.25, display.getWidth()*0.08*buttontime, ButtonFlags::startEditor);
 
   buttons.drawButtons();
@@ -464,6 +496,55 @@ void SpaceDisplay::handleEvents(BridgeView view, ButtonFlags &flags, Editor &edi
   while ( SDL_PollEvent( &event ) )
   {
     display.handleEvents(event);
+
+    /* Nur fuer Setzfenster */
+    if((view == SpaceDisplay::PutView || view == SpaceDisplay::EditorView) && (event.type == SDL_MOUSEMOTION || event.type == SDL_MOUSEBUTTONDOWN))
+    {        
+      /* Mausposition umrechnen - dazu Orthogonale Ansicht vorgaukeln */ 
+      double width = display.getWidth()-(UNIVERSE_RIGHT+UNIVERSE_LEFT);
+      double height = display.getHeight()-(UNIVERSE_TOP+UNIVERSE_BOTTOM);
+      glMatrixMode( GL_PROJECTION );
+      glLoadIdentity();
+      gluOrtho2D(0,width,0,height);
+      glMatrixMode( GL_MODELVIEW );
+      glLoadIdentity();
+
+      if(height > width)
+      { 
+	glScalef(width, width, 1.0);
+      } else {
+	glScalef(height, height, 1.0);
+      }
+
+      glScalef(1.0f, -1.0f, 1.0f);
+      glTranslatef(0.0f, -1.0f, 0.0f);
+
+      if(height > width)
+      { 
+	glTranslatef(0.0f, -0.5f*(height/(float)width)+0.5f, 0.0f);
+      } else {
+	glTranslatef(0.5f*(width/(float)height)-0.5f, 0.0f, 0.0f);
+      }
+
+      glGetIntegerv(GL_VIEWPORT,viewport);
+      glGetDoublev(GL_PROJECTION_MATRIX,projMatrix);
+      glGetDoublev(GL_MODELVIEW_MATRIX,modelMatrix);
+      glReadPixels(event.motion.x, event.motion.y, 1, 1, GL_DEPTH_COMPONENT, GL_FLOAT, &zpos );
+      gluUnProject(event.motion.x, event.motion.y, zpos,
+	  modelMatrix, projMatrix, viewport,
+	  &mousex, &mousey, &mousez
+      );
+      
+      mousey = 1.0-mousey;
+
+      bool onSpace = (event.motion.x > UNIVERSE_LEFT && 
+       event.motion.x < display.getWidth()-(UNIVERSE_RIGHT+UNIVERSE_LEFT) && 
+       event.motion.y > UNIVERSE_TOP && 
+       event.motion.y < display.getHeight()-(UNIVERSE_TOP+UNIVERSE_BOTTOM)
+      );
+
+      editor.check(mousex,mousey,event.motion.x,event.motion.y,(event.type == SDL_MOUSEBUTTONDOWN),onSpace);
+    }
 
     switch( event.type )
     {
@@ -485,7 +566,7 @@ void SpaceDisplay::handleEvents(BridgeView view, ButtonFlags &flags, Editor &edi
         /* Buttons */
         if(!editor.settingGalaxy())
 	{
-	  if(view == SpaceDisplay::PutView || view == SpaceDisplay::IntroView || view == SpaceDisplay::SimulationView || view == SpaceDisplay::EditorView)
+	  if(view == SpaceDisplay::PutView || view == SpaceDisplay::IntroView || view == SpaceDisplay::MenuView || view == SpaceDisplay::SimulationView || view == SpaceDisplay::EditorView)
           {
             buttons.checkButtons(flags,event.motion.x,event.motion.y);
           }
@@ -495,57 +576,6 @@ void SpaceDisplay::handleEvents(BridgeView view, ButtonFlags &flags, Editor &edi
 	    flags.activateFlag((AbstractButtonFlags::Actions)ButtonFlags::breakIntro);
 	  }
 	}
-
-        /* Nur fuer Setzfenster */
-        if(view == SpaceDisplay::PutView || view == SpaceDisplay::EditorView)
-        {        
-          /* Objekt setzen? */
-          if(event.motion.x > UNIVERSE_LEFT && 
-             event.motion.x < display.getWidth()-(UNIVERSE_RIGHT+UNIVERSE_LEFT) && 
-             event.motion.y > UNIVERSE_TOP && 
-             event.motion.y < display.getHeight()-(UNIVERSE_TOP+UNIVERSE_BOTTOM)
-            )
-          {                        
-            /* Mausposition umrechnen - dazu Orthogonale Ansicht vorgaukeln */ 
-            double width = display.getWidth()-(UNIVERSE_RIGHT+UNIVERSE_LEFT);
-            double height = display.getHeight()-(UNIVERSE_TOP+UNIVERSE_BOTTOM);
-            glMatrixMode( GL_PROJECTION );
-            glLoadIdentity();
-            gluOrtho2D(0,width,0,height);
-            glMatrixMode( GL_MODELVIEW );
-            glLoadIdentity();
-
-            if(height > width)
-            { 
-              glScalef(width, width, 1.0);
-            } else {
-              glScalef(height, height, 1.0);
-            }
-
-            glScalef(1.0f, -1.0f, 1.0f);
-            glTranslatef(0.0f, -1.0f, 0.0f);
-
-            if(height > width)
-            { 
-              glTranslatef(0.0f, -0.5f*(height/(float)width)+0.5f, 0.0f);
-            } else {
-              glTranslatef(0.5f*(width/(float)height)-0.5f, 0.0f, 0.0f);
-            }
-
-            glGetIntegerv(GL_VIEWPORT,viewport);
-            glGetDoublev(GL_PROJECTION_MATRIX,projMatrix);
-            glGetDoublev(GL_MODELVIEW_MATRIX,modelMatrix);
-            glReadPixels(event.motion.x, event.motion.y, 1, 1, GL_DEPTH_COMPONENT, GL_FLOAT, &zpos );
-            gluUnProject(event.motion.x, event.motion.y, zpos,
-                modelMatrix, projMatrix, viewport,
-                &mousex, &mousey, &mousez
-            );
-            
-            mousey = 1.0-mousey;
-
-            editor.check(mousex,mousey,event.motion.x,event.motion.y);
-          }
-        }
         break;
       case SDL_KEYDOWN:
         switch(event.key.keysym.sym)

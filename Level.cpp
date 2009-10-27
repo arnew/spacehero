@@ -24,11 +24,9 @@ Level::Level(std::ifstream &in) :
   m_delta(0),
   m_fpst(0),
   m_fps(0),
+  name(""),
   holes(),
-  galaxies(),
-  goal(),
-  seed(0)
-
+  goal()
 {
   char c; int i;
   bool D=false,G=false;

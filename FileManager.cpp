@@ -16,7 +16,7 @@
  */
 #include "FileManager.h"
 
-std::string FileManager::getFile()
+std::string FileManager::getFile(SpaceDisplay &disp, Universe &uni)
 {
   name = "";
   doinput = true;
@@ -26,14 +26,31 @@ std::string FileManager::getFile()
   while(doinput)
   {
     i++;
-    draw(i);
-    handleEvents();
+    draw(i,disp,uni);
+
+    SDL_Event event;
+    while ( SDL_PollEvent( &event ) )
+    {
+      disp.getDisplay()->handleEvents(event);
+      if(event.type == SDL_KEYDOWN)
+      {
+       	if((event.key.keysym.sym >= 'a' && event.key.keysym.sym <= 'z') || (event.key.keysym.sym >= '0' && event.key.keysym.sym <= '9'))
+        {
+	  name += toupper(event.key.keysym.sym);
+	} 
+	else if (event.key.keysym.sym == SDLK_RETURN)
+	{
+	  doinput = false;
+	}
+      }
+    }
+
     usleep(100000);
   }
   return name;
 }
 
-void FileManager::draw(int i)
+void FileManager::draw(int i, SpaceDisplay &display, Universe &universe)
 { 
   display.getDisplay()->cleanDisplay();
   display.drawBridge(universe, SpaceDisplay::EditorView, 100);
@@ -44,66 +61,104 @@ void FileManager::draw(int i)
   {
     sname = sname + "_";
   }
-  display.getIllustrator()->glPrint(30.0, 0.0, 1.0, 1.0, 10.0, 120.0, sname.c_str());
+  display.getIllustrator()->glPrint(30.0, 0.0, 1.0, 1.0, 10.0, 10.0, sname.c_str());
   SDL_GL_SwapBuffers();
 }
 
-void FileManager::handleEvents()
+void FileManager::loadLevels()
 {
-  SDL_Event event;
-  
-  while ( SDL_PollEvent( &event ) )
+  std::string name;
+  const boost::regex levelname("^(.*)\\.[A-Za-z0-9]*$");
+  levels.clear();
+  for(std::vector<std::string>::iterator dir = dirs.begin(); dir != dirs.end(); dir++)
   {
-    display.getDisplay()->handleEvents(event);
-    switch( event.type )
+    if (is_directory(*dir))
     {
-#if 0
-      case SDL_MOUSEBUTTONDOWN:
-        /* Buttons */
-        if(view == SpaceDisplay::PutView || view == SpaceDisplay::SimulationView || view == SpaceDisplay::EditorView)
-        {
-          buttons.checkButtons(flags,event.motion.x,event.motion.y);
-        }
-              
-        /* Nur fuer Setzfenster */
-        if(view == SpaceDisplay::PutView || view == SpaceDisplay::EditorView)
-        {        
-          /* Objekt setzen? */
-          if(event.motion.x > UNIVERSE_LEFT && 
-             event.motion.x < display.getWidth()-(UNIVERSE_RIGHT+UNIVERSE_LEFT) && 
-             event.motion.y > UNIVERSE_TOP && 
-             event.motion.y < display.getHeight()-(UNIVERSE_TOP+UNIVERSE_BOTTOM)
-            )
-          {                        
-            /* Mausposition umrechnen */
-            glGetIntegerv(GL_VIEWPORT,viewport);
-            glGetDoublev(GL_PROJECTION_MATRIX,projMatrix);
-            glGetDoublev(GL_MODELVIEW_MATRIX,modelMatrix);
-            glReadPixels(event.motion.x, event.motion.y, 1, 1, GL_DEPTH_COMPONENT, GL_FLOAT, &zpos );
-            gluUnProject(event.motion.x, event.motion.y, zpos,
-                modelMatrix, projMatrix, viewport,
-                &mousex, &mousey, &mousez
-            );
-            
-            mousey = 1.0-mousey;
-
-            editor.check(mousex,mousey);
-          }
-        }
-        break;
-#endif
-      case SDL_KEYDOWN:
-        if((event.key.keysym.sym >= 'a' && event.key.keysym.sym <= 'z') || (event.key.keysym.sym >= '0' && event.key.keysym.sym <= '9'))
-        {
-          name += toupper(event.key.keysym.sym);
-        } 
-	else if (event.key.keysym.sym == SDLK_RETURN)
-        {
-          doinput = false;
-        }
-        break;
-      default:
-        break;
+      for (directory_iterator level(*dir); level != directory_iterator(); ++level)
+      {
+	std::ifstream levelstream(level->path().string().c_str());
+	levels.push_back(Level(levelstream));
+	name = level->path().leaf();  
+        name = boost::regex_replace(name, levelname, "\\1", boost::match_default | boost::format_sed);
+	levels.back().setName(name);
+      }
     }
   }
+  srand(time(NULL));
 }
+
+Level FileManager::nextLevel()
+{
+  int nr = rand() % levels.size();
+  Level ret = levels.at(nr);
+  levels.erase(levels.begin()+nr);
+  return ret;
+}
+
+bool FileManager::hasLevel()
+{
+  return (levels.size() > 0);
+}
+
+void FileManager::LevelMan(SpaceDisplay& display)
+{
+  unsigned int nr;
+  int active = -1;
+  float fontsize = 40.0;
+  ButtonMaster buttons(*display.getPictureBook(), *display.getIllustrator());
+  ButtonFlags flags = *(new ButtonFlags());
+
+  while(true)
+  {
+    drawList(display,fontsize,active,buttons);
+    SDL_Event event;
+    while ( SDL_PollEvent( &event ) )
+    {
+      display.getDisplay()->handleEvents(event);
+      if(event.type == SDL_MOUSEBUTTONDOWN)
+      {
+	buttons.checkButtons(flags,event.motion.x,event.motion.y);
+	nr = (unsigned int)(event.motion.y / fontsize);
+	if(event.motion.x < display.getDisplay()->getWidth()*0.8 && nr > 0 && nr < levels.size()+1)
+	{
+	  active = nr - 1;
+	  std::cerr << levels.at(nr-1).getName() << std::endl;
+	}
+      }
+    }
+
+    if(flags.checkFlag(ButtonFlags::exit))
+    {
+      break;
+    }
+
+    usleep(100000);
+  }
+}
+
+void FileManager::drawList(SpaceDisplay &display, float fontsize, int active, ButtonMaster& buttons)
+{  
+  float y;
+
+  /* Bildschirm loeschen */
+  glClear( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT );  
+  display.getDisplay()->OrthoMode();
+  
+  //display.getPictureBook()->noTexture();
+    
+  glDisable(GL_BLEND);
+  glColor4f(1,1,1,1);
+  for(unsigned int i = 0; i < levels.size(); i++)
+  {
+    y = (i+1)*fontsize;
+    if((int)i == active) display.getIllustrator()->drawRect(0, 0, 1, display.getDisplay()->getWidth()*0.03, y, display.getDisplay()->getWidth()*0.7,fontsize);
+    display.getIllustrator()->glPrint(fontsize*0.8, 0.7, 0.7, 0, display.getDisplay()->getWidth()*0.05, y+fontsize*0.1, levels.at(i).getName().c_str());
+  }
+
+  buttons.clearButtons();
+  buttons.addButton("button_x", display.getDisplay()->getWidth()*0.9, display.getDisplay()->getHeight()*0.1, display.getDisplay()->getWidth()*0.07, ButtonFlags::exit);
+  buttons.drawButtons();  
+
+  SDL_GL_SwapBuffers();
+}
+

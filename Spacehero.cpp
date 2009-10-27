@@ -33,6 +33,10 @@ Spacehero::SpaceheroState Spacehero::play(SpaceDisplay::BridgeView myview)
       state = spacehero_starteditor;
       break;
     case SpaceDisplay::IntroView:
+    case SpaceDisplay::MenuView:
+      paruni = &universe;
+      state = spacehero_simulate;
+      break;
     case SpaceDisplay::SimulationView:
       state = spacehero_startsimu;
       break;
@@ -78,6 +82,7 @@ Spacehero::SpaceheroState Spacehero::play(SpaceDisplay::BridgeView myview)
       case spacehero_next:
       case spacehero_exit:
       case spacehero_emptyEditor:
+      case spacehero_chooseLevel:
         return state;
         //break;
       default:
@@ -103,48 +108,22 @@ Spacehero::SpaceheroState Spacehero::edit()
   
   if(bflags.checkFlag(ButtonFlags::saveLevel))
   {
-    FileManager saveas(display, universe);
-    std::string savefile = "/tmp/"+saveas.getFile()+".txt";
+    FileManager saveas;
+    std::string savefile = "/tmp/"+saveas.getFile(display,universe)+".txt";
     std::cout << "Wird jetzt gespeichert in: " << savefile << std::endl;
     std::ofstream levelwrite(savefile.c_str());
     levelwrite << universe;
     //state = ?
   }
 
-  display.drawBridge(universe,editor.getView(),editor.getQuotient(),editor.getHoleWeight(),editor.settingGalaxy(),editor.getGalaxyX(),editor.getGalaxyY());
+  if(bflags.checkFlag(ButtonFlags::skipLevel))
+  {
+    return spacehero_next;
+  }
+
+  display.drawBridge(universe,editor.getView(),editor.getQuotient(),editor.getHoleWeight());
   display.handleEvents(editor.getView(), bflags, editor);
-  
-  int mousex, mousey;
-  SDL_GetMouseState(&mousex, &mousey);
-
-  if(editor.getPutting())
-  {
-    display.getDisplay()->OrthoMode();
-    glEnable(GL_BLEND);
-    switch(editor.getType())
-    {
-      case Editor::hole:
-	display.getPictureBook()->useTexture("hole");
-	break;
-      case Editor::bulge:
-	display.getPictureBook()->useTexture("galaxy");
-	break;
-      case Editor::goal:
-	display.getPictureBook()->useTexture("goal");
-	break;
-    }
-    display.getIllustrator()->putImage(mousex-editor.getSize(),mousey-editor.getSize(),editor.getSize()*2,editor.getSize()*2);
-    //display.getDisplay()->PerspectiveMode();
-  }
-
-  if(editor.settingGalaxy())
-  {
-    display.getDisplay()->OrthoMode();
-    glColor3f(1,1,0);
-    display.getIllustrator()->drawLine(editor.getGalaxyX(),editor.getGalaxyY(),mousex,mousey,2);
-    glColor3f(1,1,1);
-  }
-
+  editor.drawMouse(&display);
   SDL_GL_SwapBuffers();
   
   return state;
@@ -169,7 +148,6 @@ Spacehero::SpaceheroState Spacehero::simulate()
     state = spacehero_startsimu;
   }
 
-  
   if(view == SpaceDisplay::IntroView)
   {
     double menutime;
@@ -180,9 +158,7 @@ Spacehero::SpaceheroState Spacehero::simulate()
 
     menutime = paruni->elapsed();
 
-  //  if(menutime > 5.7*2)
-    std::cerr << menutime << std::endl;
-    if(menutime > 3)
+    if(menutime > 12.15)
     {
       paruni->galaxies.at(0).setexists(false);
     }
@@ -190,30 +166,36 @@ Spacehero::SpaceheroState Spacehero::simulate()
     if(bflags.viewFlag(ButtonFlags::breakIntro))
     {
       display.showMenu(100);
-      if(menutime > 6*2)
-      {
-	display.showMenu(menutime-6*2);
-      }
+    } else if(menutime > 16)
+    {
+      display.showMenu(menutime-16);
     }
-   
-    for(j = 1; j < exp(-1.1*pow((menutime-12),2))*40; j++) 
+       
+    for(j = 1; j < exp(-1.1*pow((menutime-15),2))*40; j++) 
     {
       paruni->stars[(int)((rand() / (RAND_MAX + 1.0))*paruni->stars.size())].vz = (10e5*(rand() / (RAND_MAX + 1.0)))+2e5;
     }
 
     display.displayUniverse(*paruni, (*display.getDisplay()).getWidth(), (*display.getDisplay()).getHeight());     
-    SDL_GL_SwapBuffers();
-  } else {
-    display.drawBridge(*paruni,SpaceDisplay::SimulationView,(paruni->getmaxtime()-paruni->elapsed())/paruni->getmaxtime());
-    SDL_GL_SwapBuffers();
+  } 
+  else if(view == SpaceDisplay::MenuView)
+  {
+    display.getDisplay()->cleanDisplay();
+    display.showMenu(100);
   }
+  else
+  {
+    display.drawBridge(*paruni,SpaceDisplay::SimulationView,(paruni->getmaxtime()-paruni->elapsed())/paruni->getmaxtime());
+  }
+
+  SDL_GL_SwapBuffers();
 
   // ZEIT verballern
   float sle = 1.0e6*max(0.0,maxframerate - paruni->ldelta());
-  useconds_t sleep = 1.0e6*max(0.0,maxframerate - paruni->ldelta());
-  if(0 != usleep(sleep)) std::cerr << "usleep failed with " << sleep << " ns and " << maxframerate << " maxframerate and ldelta " << paruni->ldelta() << " and sle " << sle << std::endl;
+  useconds_t sleep = (sle > 0.0)?(useconds_t)floor(sle):0;
+  if(0 != usleep(sleep)) std::cerr << "usleep failed with " << sleep << " ns in useconds_t and " << sle << " ns in float " << std::endl;
   
-  if(view == SpaceDisplay::IntroView)
+  if(view == SpaceDisplay::IntroView || view == SpaceDisplay::MenuView)
   {
     if(bflags.checkFlag(ButtonFlags::startGame))
     {
@@ -228,6 +210,11 @@ Spacehero::SpaceheroState Spacehero::simulate()
     if(bflags.checkFlag(ButtonFlags::startEditor))
     {
       return spacehero_emptyEditor;
+    }
+  
+    if(bflags.checkFlag(ButtonFlags::chooseLevel))
+    {
+      return spacehero_chooseLevel;
     }
   }
   else
@@ -265,152 +252,4 @@ Spacehero::SpaceheroState Spacehero::simulate()
 Spacehero::SpaceheroState Spacehero::handleEvents() {
   return state;
 }
-
-
-#if 0
-Kamera cam;
-
-int win, simulationTime, i, first;
-int clocktime;
-float diff;
-
-state.mediumHole(this->state);
-
-/* Solange nicht beendet wurde, oder das Level geschafft */  
-win = 0;
-first = 1;
-while(win == 0)
-{
-
-  state.clearStatus();
-
-  /* Fenster zeichnen */
-  uni.drawPut( *this );
-
-  /* so lange bis jemand die Simulation startet */
-  if(first)
-  {
-    first = 0;
-    continue;
-  }
-
-  while( !(state.m_startSimulation || state.m_exit) )
-  { 
-    handleEvents( *this, PUT, uni );
-  }
-
-  if(state.m_exit) break;
-
-  /* Simulation */
-  do
-  {
-    state.m_replaySimulation = 0;
-
-    /* Paralleluniversum erzeugen */
-    paruni.goal = uni.goal;
-    paruni.holesSize = uni.holesSize;
-    paruni.galaxiesSize = uni.galaxiesSize;
-    paruni.starsSize = uni.starsSize;
-    paruni.stars = (skymass*)malloc(sizeof(skymass)*paruni.starsSize);
-
-    /* Inputarrays kopieren */
-    for(i = 0; i < uni.galaxiesSize; i++)
-    {
-      paruni.galaxies[i] = uni.galaxies[i];
-    }
-
-    for(i = 0; i < uni.holesSize; i++)
-    {
-      paruni.holes[i] = uni.holes[i];
-    }
-
-    for(i = 0; i < uni.starsSize; i++)
-    {
-      paruni.stars[i] = uni.stars[i];
-    }
-
-    cam.rx = cam.ry = cam.rz = 0;
-
-    /* bis die Zeit abgelaufen ist, oder Ziel erreicht */
-    for(simulationTime = 1; simulationTime < MAXTIME; simulationTime++)
-    {
-      clocktime = clock();
-      cam.rx = 0;
-
-      paruni.move(simulationTime);
-      paruni.eventHorizon();
-
-      paruni.drawSimulation(*this, &cam, simulationTime);
-
-      handleEvents( *this, SIMULATION, uni );
-
-      /* Abbrechen */
-      if(state.m_breakSimulation || state.m_replaySimulation || state.m_exit)
-      {
-        simulationTime = MAXTIME;
-        break;
-      }
-
-      /* gewonnen? */
-      if(sqrt(pow(paruni.galaxies[0].x - paruni.goal.x,2)+pow(paruni.galaxies[0].y - paruni.goal.y,2)) < paruni.goal.r && paruni.galaxies[0].exists)
-      {
-        break;
-      }
-
-      /* etwas warten... */
-      diff = TIMESTEP-((float)(clock()-clocktime)/CLOCKS_PER_SEC);
-      diff = (diff > 0)?diff:0;
-      usleep(1000000*diff);
-    }
-
-    glEnable(GL_BLEND);
-
-    if(simulationTime == MAXTIME)
-    {
-      /* TIMEOUT oder ABBRUCH */
-      win = 0;
-
-      if(!(state.m_breakSimulation || state.m_replaySimulation || state.m_exit))
-      {
-        putImage( IMG_LOST, 0.5-((265.0/102)*0.12)*0.5, 0.5-(0.12*0.5), (265.0/102)*0.12, 0.12);
-        SDL_GL_SwapBuffers();
-        for(i = 0; i < 200; i++)
-        {
-          handleEvents( *this, SIMULATION, uni );
-          if(state.m_breakSimulation || state.m_replaySimulation || state.m_exit)
-          {
-            break;
-          }
-          usleep(10000);
-        }
-      }
-    } else {
-      /* WIN */
-      win = 1;
-      putImage( IMG_WIN, 0.5-((629.0/102)*0.12)*0.5, 0.5-(0.12*0.5), (629.0/102)*0.12, 0.12 );
-      SDL_GL_SwapBuffers();
-      for(i = 0; i < 500; i++)
-      {
-        handleEvents( *this, SIMULATION, uni );
-        if(state.m_breakSimulation || state.m_replaySimulation || state.m_exit)
-        {
-          break;
-        }
-        usleep(10000);
-      }
-    }
-
-    glDisable(GL_BLEND);
-
-    free(paruni.stars);      
-  } while(state.m_replaySimulation);
-
-  paruni.stars = NULL;
-  free(uni.stars);
-
-  if(state.m_exit) break;
-}
-}
-#endif
-
 

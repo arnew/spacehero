@@ -30,7 +30,7 @@
 #include <iostream>
 #include <climits>
 
-
+#include "SDL/SDL.h" 
 
 using boost::timer;
 using boost::progress_timer;
@@ -61,6 +61,9 @@ class SkyObject {
     void setX(double ix){x = ix;}
     void setY(double iy){y = iy;}
     void setZ(double iz){z = iz;}
+    double getX(){return x;}
+    double getY(){return y;}
+    double getZ(){return z;}
   public:
     friend std::ostream& operator<< (std::ostream &o, const SkyObject &g);
 };
@@ -78,6 +81,8 @@ class SkyMass : public SkyObject {
     inline void move(double delta);
     void setVX(double ivx){vx = ivx;}
     void setVY(double ivy){vy = ivy;}
+    double getVX(){return vx;}
+    double getVY(){return vy;}
 
   public:
     friend std::ostream& operator<< (std::ostream &o, const SkyMass &g);
@@ -129,28 +134,41 @@ class Star : public SkyMass {
     friend std::ostream& operator<< (std::ostream &o, const Star &g);
 };
 
-class Level {
-    timer t0;
+class Sky 
+{
+  protected:
+    int seed;
+  public:
+    std::vector<Star> stars;
+    std::vector<Galaxy> galaxies;
+    Sky() :seed(0),stars(),galaxies() {};
+    virtual ~Sky() {};
+    void calcStars();
+};
+
+class Level : public Sky
+{
+    unsigned int t0;
     double maxtime;
     double lastt;
     double m_delta;
 
     double m_fpst;
     double m_fps;
+    std::string name;
   public:
     std::vector<Blackhole> holes;
-    std::vector<Galaxy> galaxies;
     Goal goal;
-  protected:
-    int seed;
   public:
     Level(std::ifstream &in);
-    Level():t0(),maxtime(30.0),lastt(0),m_delta(0),m_fpst(0),m_fps(0),holes(),galaxies(),goal(),seed(0) {};
+    Level():t0(),maxtime(30.0),lastt(0),m_delta(0),m_fpst(0),m_fps(0),name(""),holes(),goal() {};
     virtual ~Level() {};
+    void setName(std::string iname){name = iname;}
+    std::string getName(){return name;}
 
   public:
-    void tinit() { t0 = timer(); }; // start time measure
-    double elapsed() { return t0.elapsed(); }; // get elapsed time
+    void tinit() { t0 = SDL_GetTicks(); }; // start time measure
+    double elapsed() { return (SDL_GetTicks()-t0)/1000.0; }; // get elapsed time
 
     void tick() { lastt=elapsed(); };
     void tack(double weight=0.9) {
@@ -180,11 +198,8 @@ class Universe: public Level
   bool m_won;
   bool stargrav;
   public:
-  std::vector<Star> stars;  
-  public:
   Universe(Level &l);
-  Universe() :m_won(false),stargrav(false),stars() {};
-  void calcStars();
+  Universe() :m_won(false),stargrav(false) {};
 
   //bool play(GLdisplay &d);
   void move(double delta);

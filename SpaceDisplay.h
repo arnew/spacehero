@@ -58,11 +58,12 @@ class SpaceDisplay
       SimulationView,
       PutView,
       EditorView,
-      IntroView
+      IntroView,
+      MenuView
     };
 
-    void displayUniverse( Universe &uni, int width, int height, bool eye = false, bool pleft = true );
-    void drawBridge(Universe &uni, BridgeView view, double indicator, double holeWeight = 0, bool settingGalaxy = false, int galaxyX = 0, int galaxyY = 0);
+    void displayUniverse( Universe &uni, int width, int height, bool eye = false, bool pleft = true, bool arrows = false );
+    void drawBridge(Universe &uni, BridgeView view, double indicator, double holeWeight = 0);
     void handleEvents(BridgeView view, ButtonFlags &flags, Editor &editor);
     void showEnd(bool win, ButtonFlags &flags);
     void showMenu(double time);
